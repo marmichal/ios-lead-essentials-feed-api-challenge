@@ -31,12 +31,32 @@ public final class RemoteFeedLoader: FeedLoader {
 				if httpResponse.statusCode != Constants.successSatusCode {
 					completion(.failure(RemoteFeedLoader.Error.invalidData))
 				} else {
-					if let object = try? JSONSerialization.jsonObject(with: data, options: []) as? [FeedImage] {
+					if let images = try? JSONDecoder().decode(FeedLoaderResponse.self, from: data) {
+						completion(.success(images.items.map { $0.feedImage }))
 					} else {
 						completion(.failure(RemoteFeedLoader.Error.invalidData))
 					}
 				}
 			}
 		}
+	}
+}
+
+struct FeedLoaderResponse: Decodable {
+	let items: [Image]
+}
+
+struct Image: Decodable {
+	public let id: UUID
+	public let description: String?
+	public let location: String?
+	public let url: URL
+
+	var feedImage: FeedImage {
+		return FeedImage(
+			id: id,
+			description: description,
+			location: location,
+			url: url)
 	}
 }
