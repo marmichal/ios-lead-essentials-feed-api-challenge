@@ -5,7 +5,7 @@
 import Foundation
 
 public final class RemoteFeedLoader: FeedLoader {
-	enum Constants {
+	private enum Constants {
 		static let successSatusCode = 200
 	}
 
@@ -26,42 +26,43 @@ public final class RemoteFeedLoader: FeedLoader {
 		client.get(from: url) { [weak self] result in
 			guard self != nil else { return }
 			switch result {
-			case .failure(_):
-				completion(.failure(RemoteFeedLoader.Error.connectivity))
-			case .success((let data, let httpResponse)):
-				if httpResponse.statusCode != Constants.successSatusCode {
-					completion(.failure(RemoteFeedLoader.Error.invalidData))
-				} else {
-					if let images = try? JSONDecoder().decode(FeedLoaderResponse.self, from: data) {
-						completion(.success(images.items.compactMap { $0.feedImage }))
-					} else {
-						completion(.failure(RemoteFeedLoader.Error.invalidData))
-					}
+			case .failure:
+				completion(.failure(Error.connectivity))
+			case let .success((data, httpResponse)):
+				guard httpResponse.statusCode == Constants.successSatusCode,
+				      let images = try? JSONDecoder().decode(FeedLoaderResponse.self, from: data) else {
+					completion(.failure(Error.invalidData))
+					return
 				}
+
+				completion(.success(images.items.feedImageItems()))
 			}
 		}
 	}
 }
 
-struct FeedLoaderResponse: Decodable {
+private struct FeedLoaderResponse: Decodable {
 	let items: [Image]
 }
 
-struct Image: Decodable {
+private struct Image: Decodable {
 	public let image_id: UUID
 	public let image_desc: String?
 	public let image_loc: String?
-	public let image_url: String
+	public let image_url: URL
 
-	var feedImage: FeedImage? {
-		if let url = URL(string: image_url) {
-			return FeedImage(
-				id: image_id,
-				description: image_desc,
-				location: image_loc,
-				url: url
-			)
-		}
-		return nil
+	var feedImage: FeedImage {
+		return FeedImage(
+			id: image_id,
+			description: image_desc,
+			location: image_loc,
+			url: image_url
+		)
+	}
+}
+
+extension Array where Element == Image {
+	func feedImageItems() -> [FeedImage] {
+		return map { $0.feedImage }
 	}
 }
